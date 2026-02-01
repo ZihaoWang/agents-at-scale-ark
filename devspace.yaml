@@ -41,6 +41,9 @@ dependencies:
 # Vars - To disable, set environment variables before the devspace commands
 #        For example: ENABLE_CERT_MANAGER=false devspace dev
 vars:
+  PROFILE_FLAG:
+    source: env
+    default: ""
   ENABLE_CERT_MANAGER:
     source: env
     default: true
@@ -102,9 +105,15 @@ profiles:
                 path: ./charts/ark-tenant
               releaseName: ark-tenant
               upgradeArgs: [ "--install" ]
+  - name: minikube
+    patches:
+      - op: replace
+        path: vars.PROFILE_FLAG.default
+        value: "minikube"
 
 pipelines:
   deploy: |-
+    export DEVSPACE_PROFILES=${PROFILE_FLAG}
     
     if [ "${ENABLE_CERT_MANAGER}" == "true" ]; then
       create_deployments cert-manager
@@ -122,6 +131,7 @@ pipelines:
     
     run_dependency_pipelines --all --exclude ark --pipeline=deploy
   dev: |-
+    export DEVSPACE_PROFILES=${PROFILE_FLAG}
     
     if [ "${ENABLE_CERT_MANAGER}" == "true" ]; then
       create_deployments cert-manager
