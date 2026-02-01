@@ -18,10 +18,19 @@ log() {
 
 check_colima() {
     if colima status >/dev/null 2>&1; then
-        log "Colima is already running."
+        # Check if it's using QEMU (memory hungry) instead of VZ (Virtualization.framework)
+        if pgrep -f "qemu-system-aarch64" >/dev/null; then
+            log "${RED}Warning: Colima is running with QEMU (high memory usage detected).${NC}"
+            log "Restarting Colima with Apple Virtualization (VZ) for better performance..."
+            colima stop
+            colima start --cpu 4 --memory 8 --vm-type=vz --vz-rosetta
+        else
+            log "Colima is already running (optimized)."
+        fi
     else
-        log "Starting Colima (4 CPU, 8GB RAM)..."
-        colima start --cpu 4 --memory 8
+        log "Starting Colima (4 CPU, 8GB RAM, VZ mode)..."
+        # Use VZ (Virtualization.framework) + Rosetta for efficient memory usage on Apple Silicon
+        colima start --cpu 4 --memory 8 --vm-type=vz --vz-rosetta
     fi
 }
 
@@ -107,14 +116,26 @@ do_delete_ark() {
     
     # 4. Explicitly delete deployments/pods in default namespace (in case Helm left them)
     log "Sweeping leftover resources in default namespace..."
-    kubectl delete deployment argo-workflows-server ark-api ark-broker ark-dashboard -n default --ignore-not-found --timeout=30s
-    kubectl delete svc argo-workflows-server ark-api ark-broker ark-dashboard -n default --ignore-not-found --timeout=30s
+
+    # Deployments
+    kubectl delete deployment argo-workflows-server argo-workflows-workflow-controller ark-api ark-broker ark-dashboard -n default --ignore-not-found --timeout=30s
+
+    # StatefulSets
+    kubectl delete statefulset myminio-pool-0 -n default --ignore-not-found --timeout=30s
+
+    # Services
+    kubectl delete svc argo-workflows-server ark-api ark-broker ark-dashboard minio myminio-hl -n default --ignore-not-found --timeout=30s
+
+    # PVCs
     kubectl delete pvc -l app.kubernetes.io/instance=ark-broker -n default --ignore-not-found --timeout=30s
+    kubectl delete pvc -l v1.min.io/tenant=myminio -n default --ignore-not-found --timeout=30s
     
     # Force delete any stubborn pods related to ark
     kubectl delete pod -l app.kubernetes.io/instance=ark-api -n default --ignore-not-found --grace-period=0 --force
     kubectl delete pod -l app.kubernetes.io/instance=ark-broker -n default --ignore-not-found --grace-period=0 --force
     kubectl delete pod -l app.kubernetes.io/instance=ark-dashboard -n default --ignore-not-found --grace-period=0 --force
+    kubectl delete pod -l app.kubernetes.io/name=argo-workflows-workflow-controller -n default --ignore-not-found --grace-period=0 --force
+    kubectl delete pod -l v1.min.io/tenant=myminio -n default --ignore-not-found --grace-period=0 --force
     
     log "${GREEN}Ark resources deleted. Cluster is clean.${NC}"
 }
