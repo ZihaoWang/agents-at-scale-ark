@@ -7,14 +7,14 @@ This guide helps you run the Ark platform locally on a MacBook (Air/Pro) using M
 By default, Docker and Minikube can consume too many resources (or too few to run Ark). We explicitly size them to **4 CPUs** and **8GB RAM**, which is enough for Ark but leaves room for your OS.
 
 ### Step 1: Configure Colima
-Colima provides the virtual machine (VM) that Docker runs in.
+Colima provides the virtual machine (VM) that Docker runs in. We use `--vm-type=vz` (Apple's native Virtualization framework) instead of QEMU because QEMU can consume significantly more memory than allocated (overhead/bloat) on Apple Silicon. VZ respects the memory limit strictly and is more performant.
 
 ```bash
 # Stop any existing instance
 colima stop
 
-# Start with optimized limits (4 CPUs, 8GB RAM)
-colima start --cpu 4 --memory 8
+# Start with optimized limits (4 CPUs, 8GB RAM) and VZ (fixes QEMU memory bloat)
+colima start --cpu 4 --memory 8 --vm-type=vz --vz-rosetta
 ```
 
 ### Step 2: Start Minikube
@@ -26,6 +26,16 @@ minikube delete
 
 # Start Minikube (using slightly less memory than the VM total to be safe)
 minikube start --driver=docker --cpus 4 --memory 7500m
+```
+
+# Automated Script
+
+We have created a script that handles all of this for you (starting, stopping, cleaning up):
+
+```bash
+./my_dev/scripts/ark-control.sh start-minikube
+./my_dev/scripts/ark-control.sh start-ark
+./my_dev/scripts/ark-control.sh delete-ark
 ```
 
 ---
